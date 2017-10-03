@@ -4,7 +4,9 @@
 
 HilbertCurve::HilbertCurve()
 	: order_(0),
-	size_(0)
+	size_(0),
+  stride_(0),
+  stride_plane_(0)
 {
 }
 
@@ -91,6 +93,128 @@ void HilbertCurve::swap_state(point_state &a, point_state &b)
   p_state_[point] = &a;
   point = b.y * stride_ + b.x;
   p_state_[point] = &b;
+}
+
+void HilbertCurve::swap_state3d(point_state &a, point_state &b)
+{
+  point_state a_copy = a;
+  a.x = b.x;
+  a.y = b.y;
+  a.z = b.z;
+  b.x = a_copy.x;
+  b.y = a_copy.y;
+  b.z = a_copy.z;
+
+  uint32_t point = a.z * stride_plane_ + a.y * stride_ + a.x;
+  p_state_[point] = &a;
+  point = b.z * stride_plane_ + b.y * stride_ + b.x;
+  p_state_[point] = &b;
+}
+
+void HilbertCurve::grow3d(uint32_t order)
+{
+  if (!order)
+    return;
+
+  order_ = order;
+  size_ = 1 << order_;
+  stride_ = size_;
+  uint32_t offset = 0;
+  uint32_t point = 0;
+  stride_plane_ = size_ * size_;
+  state_.resize(size_*size_*size_);
+  p_state_.resize(state_.size());
+  uint32_t dim = 0;
+  uint32_t max_index = 0;
+  uint32_t point_a = 0, point_b = 0;
+
+  for (uint32_t z = 0; z < size_; ++z)
+  {
+    for (uint32_t y = 0; y < size_; ++y)
+    {
+      for (uint32_t x = 0; x < size_; ++x)
+      {
+        state_[point].x = x;
+        state_[point].y = y;
+        state_[point].z = z;
+        p_state_[point] = &state_[point];
+        point++;
+      }
+    }
+  }
+
+  state_[0].p_prev = &state_[0]; 
+  state_[0].p_next = &state_[stride_plane_];                          // 0 --> 1
+  state_[stride_plane_].p_prev = &state_[0];                          // 1 <-- 0
+  state_[stride_plane_].p_next = &state_[stride_plane_ + 1];          // 1 --> 2
+  state_[stride_plane_ + 1].p_prev = &state_[stride_plane_];          // 2 <-- 1
+  state_[stride_plane_ + 1].p_next = &state_[1];                      // 2 --> 3
+  state_[1].p_prev = &state_[stride_plane_ + 1];                      // 3 <-- 2
+  state_[1].p_next = &state_[stride_ + 1];                            // 3 --> 4
+  state_[stride_ + 1].p_prev = &state_[1];                            // 4 <-- 3
+  state_[stride_ + 1].p_next = &state_[stride_plane_ + stride_ + 1];  // 4 --> 5
+  state_[stride_plane_ + stride_ + 1].p_prev = &state_[stride_ + 1];  // 5 <-- 4
+  // 5 --> 6
+  state_[stride_plane_ + stride_ + 1].p_next = &state_[stride_plane_ + stride_];
+  // 6 <-- 5
+  state_[stride_plane_ + stride_].p_prev = &state_[stride_plane_ + stride_ + 1];
+  state_[stride_plane_ + stride_].p_next = &state_[stride_];          // 6 --> 7
+  state_[stride_].p_prev = &state_[stride_plane_ + stride_];          // 7 <-- 6
+  state_[stride_].p_next = NULL;
+
+  // report
+  point_state* p_current = &state_[0];
+  uint32_t distance = 0;
+  uint32_t z_offset = 0;
+
+  int32_t dx = 0;
+  int32_t dy = 0;
+  int32_t rx = 0;
+  int32_t ry = 0;
+  point_state* p_qaud_0_start = NULL, *p_qaud_0_end = NULL;
+  point_state* p_qaud_1_start = NULL, *p_qaud_1_end = NULL;
+  point_state* p_qaud_2_start = NULL, *p_qaud_2_end = NULL;
+  point_state* p_qaud_3_start = NULL, *p_qaud_3_end = NULL;
+
+  p_qaud_0_start = &state_[0];
+
+  for (uint32_t o = 2; o <= order_; ++o)
+  {
+    dim = 1 << (o - 1);
+    max_index = dim - 1;
+    // copy to quad 1 and 2
+    offset = dim * stride_;
+
+    for (uint32_t z = 0; z < dim; ++z)
+    {
+      z_offset = z * stride_plane_;
+
+      for (uint32_t y = 0; y < dim; ++y)
+      {
+        for (uint32_t x = y; x < dim; ++x)
+        {
+          point_a = z_offset + x * stride_ + y;
+          point_b = z_offset + y * stride_ + x;
+
+          if (point_b != point_a)
+            swap_state3d(*p_state_[point_a], *p_state_[point_b]);
+        }
+      }
+    }
+  }
+
+  point = 0;
+  while (p_current)
+  {
+    p_current->distance = distance++;
+
+    printf("%03u. (%02u,%02u,%02u)\n",
+      p_current->distance,
+      p_current->x,
+      p_current->y,
+      p_current->z);
+    p_current = p_current->p_next;
+  }
 }
 
 void HilbertCurve::grow2d(uint32_t order)

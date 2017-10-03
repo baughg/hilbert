@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <vector>
+#include <algorithm>
 
 void d2xy(int n, int d, int &x, int &y);
 int i4_power(int i, int j);
@@ -14,18 +15,121 @@ int xy2d(int n, int x, int y);
 
 using namespace std;
 
+bool sort_hilbert(const point3d &lhs, const point3d &rhs)
+{
+  return lhs.order < rhs.order;
+}
+
+uint32_t SeparateBy1(unsigned int x) {
+  x &= 0x0000ffff;                  // x = ---- ---- ---- ---- fedc ba98 7654 3210
+  x = (x ^ (x << 8)) & 0x00ff00ff; // x = ---- ---- fedc ba98 ---- ---- 7654 3210
+  x = (x ^ (x << 4)) & 0x0f0f0f0f; // x = ---- fedc ---- ba98 ---- 7654 ---- 3210
+  x = (x ^ (x << 2)) & 0x33333333; // x = --fe --dc --ba --98 --76 --54 --32 --10
+  x = (x ^ (x << 1)) & 0x55555555; // x = -f-e -d-c -b-a -9-8 -7-6 -5-4 -3-2 -1-0
+  return x;
+}
+
+
+uint32_t MortonCode2(unsigned int x, unsigned int y) {
+  return SeparateBy1(x) | (SeparateBy1(y) << 1);
+}
+
+uint32_t MortonCode3(unsigned int x, unsigned int y, unsigned int z) {
+  uint32_t out = 0;
+  uint32_t x_lsb, y_lsb, z_lsb, lsb;
+
+  for (int b = 0; b < 8; ++b)
+  {
+    x_lsb = x & 0x1;
+    y_lsb = y & 0x1;
+    z_lsb = z & 0x1;
+    x >>= 1;
+    y >>= 1;
+    z >>= 1;
+
+    lsb = x_lsb;
+    lsb |= (y_lsb << 1);
+    lsb |= (z_lsb << 2);
+    lsb <<= (b * 3);
+    out |= lsb;
+  }
+
+  return out;
+}
 
 int main()
 {
-  const int m = 5; // the index of the Hilbert curve.
+  const int m = 12; // the index of the Hilbert curve.
   uint32_t h = 0;
-  HilbertCurve curve;
-  curve.grow2d(m);
-  //return 0;
+  //HilbertCurve curve;
 
+  std::vector<uint32_t> colour_lookup;
+  colour_lookup.resize(1 << 24);
+  int x_inc = 1;
+  int y_inc = 1;
+  uint8_t* p_colour = (uint8_t*)&colour_lookup[0];
+
+  FILE* colour_file = NULL;
+
+//#define GENERATE_COLOUR_LUT
+#ifdef GENERATE_COLOUR_LUT
+  //curve.grow2d(m);
+  //curve.grow3d(2);
+  uint32_t limit = (1 << m);
+  uint32_t hcode = 0;
+  uint32_t code = 0;
+  std::vector<point3d> point3d_ordered;
+  uint32_t colour_count_all = limit * limit * limit;
+  //colour_count_all *= (limit*limit);
+  point3d_ordered.resize(colour_count_all);
+
+  for(int z = 0; z < limit; ++z)
+    for (int y = 0; y < limit; ++y)
+      for (int x = 0; x < limit; ++x) {        
+        code = x + (y * limit) + (z * limit * limit);
+        code = MortonCode3(x, y, z);
+        hcode = mortonToHilbert3D(code, m);
+        point3d_ordered[code].order = hcode;
+        point3d_ordered[code].x = x;
+        point3d_ordered[code].y = y;
+        point3d_ordered[code].z = z;
+        //printf("%02u. (%02u,%02u,%02u)\n", hcode,x,y,z);
+      }
+
+  std::sort(point3d_ordered.begin(), point3d_ordered.end(), sort_hilbert);
+  size_t point_orders = point3d_ordered.size();
+  
+  fopen_s(&colour_file, "rgb_line.dat", "wb");
+  for (size_t p = 0; p < point_orders; ++p)
+  {
+    colour_lookup[p] = point3d_ordered[p].x + (point3d_ordered[p].y * 256);
+    colour_lookup[p] += (point3d_ordered[p].z * 256 * 256);
+    /*printf("%02u. (%02u,%02u,%02u)\n", 
+      point3d_ordered[p].order, 
+      point3d_ordered[p].x, 
+      point3d_ordered[p].y, 
+      point3d_ordered[p].z);*/
+  }
+  
+  if (colour_file)
+  {
+    fwrite(&colour_lookup[0], sizeof(uint32_t), colour_lookup.size(), colour_file);
+    fclose(colour_file);
+  }
+#else
+  fopen_s(&colour_file, "rgb_line.dat", "rb");
+
+  if (colour_file)
+  {
+    fread(&colour_lookup[0], sizeof(uint32_t), colour_lookup.size(), colour_file);
+    fclose(colour_file);
+  }
+  else
+    exit(0);
+#endif
    
   const int d = 0;
-  uint32_t x = 0, y = 0;
+  int x = 0, y = 0;
   int n = 1 << m;
   int points = n * n;
   uint32_t colour_step = 1 << 24;
@@ -38,56 +142,52 @@ int main()
   uint32_t channel = 0;
   uint32_t channel2 = 0;
   char file_out_name[256];
-  std::vector<uint32_t> colour_lookup;
-  colour_lookup.resize(1 << 24);
-  int x_inc = 1;
-  int y_inc = 1;
-  uint8_t* p_colour = (uint8_t*)&colour_lookup[0];
-  int xc = 0;
-  int yc = 0;
+  
+  //int xc = 0;
+  //int yc = 0;
 
-  for (int z = 0; z < (1 << 8); ++z)
-  {
-    for (int p = 0; p < (1 << 16); ++p)
-    {
-      // work
-      *p_colour++ = (uint8_t)(xc & 0xff);
-      *p_colour++ = (uint8_t)(yc & 0xff);
-      *p_colour++ = (uint8_t)(z & 0xff);
-      p_colour++;
-      xc += x_inc;
-      if (xc >= 256)
-      {
-        yc += y_inc;
-        xc = 255;
-        x_inc = -1;
-      }
-      else if (xc <= -1)
-      {
-        yc += y_inc;
-        xc = 0;
-        x_inc = 1;
-      }
-    }
+  //for (int z = 0; z < (1 << 8); ++z)
+  //{
+  //  for (int p = 0; p < (1 << 16); ++p)
+  //  {
+  //    // work
+  //    *p_colour++ = (uint8_t)(xc & 0xff);
+  //    *p_colour++ = (uint8_t)(yc & 0xff);
+  //    *p_colour++ = (uint8_t)(z & 0xff);
+  //    p_colour++;
+  //    xc += x_inc;
+  //    if (xc >= 256)
+  //    {
+  //      yc += y_inc;
+  //      xc = 255;
+  //      x_inc = -1;
+  //    }
+  //    else if (xc <= -1)
+  //    {
+  //      yc += y_inc;
+  //      xc = 0;
+  //      x_inc = 1;
+  //    }
+  //  }
 
-    if (yc >= 256)
-    {     
-      yc = 255;
-      y_inc = -1;
-    }
-    else if (yc <= -1)
-    {      
-      yc = 0;
-      y_inc = 1;
-    }
-  }
-#define d2xy_run
+  //  if (yc >= 256)
+  //  {     
+  //    yc = 255;
+  //    y_inc = -1;
+  //  }
+  //  else if (yc <= -1)
+  //  {      
+  //    yc = 0;
+  //    y_inc = 1;
+  //  }
+  //}
+//#define d2xy_run
 #ifdef d2xy_run
   memset(p_first_pixel, 0xff, points * 3);
 
   for (int p = 0; p < points; ++p) {
-    curve.get_xy(p, x, y);
-    //d2xy(m, p, x, y);
+    //curve.get_xy(p, x, y);
+    d2xy(m, p, x, y);
     //printf("%03d. (%03d,%03d)\n",p,x,y);
     //channel = colour;
     /*channel = p % 256;
