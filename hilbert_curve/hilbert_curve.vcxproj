@@ -19,9 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{5F85944C-C37D-42F9-9F56-6C6C10E27C71}</ProjectGuid>
+    <ProjectGuid>{C591CB10-EC4B-4636-9ADF-97D9BCA98BF0}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>hilbert3d</RootNamespace>
+    <RootNamespace>hilbert_curve</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -145,14 +145,18 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="HibertCurve.h" />
+    <ClInclude Include="curve3d.h" />
+    <ClInclude Include="HilbertCurve.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="HibertCurve.cpp" />
-    <ClCompile Include="hilbert3d.cpp" />
+    <ClCompile Include="curve3d.cpp" />
+    <ClCompile Include="HilbertCurve.cpp" />
+    <ClCompile Include="hilbert_curve.cpp" />
     <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="util.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
