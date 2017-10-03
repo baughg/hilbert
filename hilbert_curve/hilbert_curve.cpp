@@ -60,6 +60,7 @@ uint32_t MortonCode3(unsigned int x, unsigned int y, unsigned int z) {
 int main()
 {
   const int m = 12; // the index of the Hilbert curve.
+	const int rgb_bits = 8;
   uint32_t h = 0;
   //HilbertCurve curve;
 
@@ -71,11 +72,11 @@ int main()
 
   FILE* colour_file = NULL;
 
-//#define GENERATE_COLOUR_LUT
+#define GENERATE_COLOUR_LUT
 #ifdef GENERATE_COLOUR_LUT
   //curve.grow2d(m);
   //curve.grow3d(2);
-  uint32_t limit = (1 << m);
+  uint32_t limit = (1 << rgb_bits);
   uint32_t hcode = 0;
   uint32_t code = 0;
   std::vector<point3d> point3d_ordered;
@@ -88,7 +89,7 @@ int main()
       for (int x = 0; x < limit; ++x) {        
         code = x + (y * limit) + (z * limit * limit);
         code = MortonCode3(x, y, z);
-        hcode = mortonToHilbert3D(code, m);
+        hcode = mortonToHilbert3D(code, rgb_bits);
         point3d_ordered[code].order = hcode;
         point3d_ordered[code].x = x;
         point3d_ordered[code].y = y;
